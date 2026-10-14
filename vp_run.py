@@ -81,7 +81,7 @@ class Pipeline:
         assert not left, f"unfilled placeholders in {name}: {left}"
         return text
 
-    def claude(self, tag, prompt, flags, timeout, budget):
+    def claude(self, tag, prompt, flags, timeout, budget, extra_env=None):
         """One headless claude call. Returns the parsed JSON result (with
         'ok' added), saving stdout/stderr under runs/<id>/calls/."""
         calls = self.run / "calls"
@@ -94,7 +94,8 @@ class Pipeline:
         t0 = time.time()
         try:
             p = subprocess.run(cmd, cwd=self.vault, stdin=subprocess.DEVNULL,
-                               capture_output=True, text=True, timeout=timeout)
+                               capture_output=True, text=True, timeout=timeout,
+                               env={**os.environ, **(extra_env or {})})
             out, errtxt, rc = p.stdout, p.stderr, p.returncode
         except subprocess.TimeoutExpired as e:
             out = e.stdout or ""
@@ -163,6 +164,25 @@ class Pipeline:
                 shutil.move(str(dst), str(src))
         self.moved = []
 
+    def changed_files(self):
+        """'added|modified|deleted <path>' for every file that differs from
+        the snapshot, so the merge agent needn't diff in a shell."""
+        out = []
+        live, saved = self.vault / "wiki", self.snap / "wiki"
+        for p in sorted(live.rglob("*.md")):
+            q = saved / p.relative_to(live)
+            if not q.exists():
+                out.append(f"added    wiki/{p.relative_to(live).as_posix()}")
+            elif not filecmp.cmp(p, q, shallow=False):
+                out.append(f"modified wiki/{p.relative_to(live).as_posix()}")
+        for q in sorted(saved.rglob("*.md")):
+            if not (live / q.relative_to(saved)).exists():
+                out.append(f"deleted  wiki/{q.relative_to(saved).as_posix()}")
+        for f in ("index.md", "log.md"):
+            if not filecmp.cmp(self.vault / f, self.snap / f, shallow=False):
+                out.append(f"modified {f}")
+        return out
+
     def fingerprint(self, paths):
         h = hashlib.sha256()
         for root in paths:
@@ -218,8 +238,11 @@ class Pipeline:
         flags = ["--tools", "Read,Write,Edit,Glob,Grep",
                  "--permission-mode", "acceptEdits", "--strict-mcp-config",
                  "--add-dir", str(self.run)]
+        # The vault's Stop hook (vp_lint.hook) reads these: it skips the
+        # checks that are the merge agent's job and adds provenance.
         d = self.claude(f"ingest{attempt}_{k:02d}", prompt, flags,
-                        self.a.agent_timeout, self.a.agent_budget)
+                        self.a.agent_timeout, self.a.agent_budget,
+                        {"VP_HOOK_ROLE": "ingest", "VP_SNAPSHOT": str(self.snap)})
         return self.validate(item, proc_rel, manifest, d)
 
     def validate(self, item, proc_rel, manifest, d):
@@ -367,6 +390,8 @@ class Pipeline:
         lint_sh.write_text(f'#!/bin/bash\nexec "{sys.executable}" -I "{HERE / "vp_lint.py"}" '
                            f'"{self.vault}" --snapshot "{self.snap}" "$@"\n')
         lint_sh.chmod(0o755)
+        changed = self.run / "changed.txt"
+        changed.write_text("\n".join(self.changed_files()) + "\n")
         sid = str(uuid.uuid4())
         mlist = "\n".join(f"- `{m['_manifest']}`: {m.get('title')} "
                           f"({m.get('source_page')})" for _, _, m in ok) or "- (none: lint-only run)"
@@ -374,7 +399,8 @@ class Pipeline:
                  "ignore them): " + "; ".join(p.name for p, _, _ in failed)) if failed else ""
         pa = self.prompt("merge_a.md", RUN_ID=self.run_id, TODAY=self.today,
                          N_OK=len(ok), RUN_DIR=self.run, MANIFEST_LIST=mlist,
-                         FAILED_NOTE=fnote, SNAPSHOT=self.snap, LINT_CMD=lint_sh)
+                         FAILED_NOTE=fnote, SNAPSHOT=self.snap, LINT_CMD=lint_sh,
+                         CHANGED=changed)
         self.log("merge agent phase A")
         d = self.claude("merge_a", pa, ["--session-id", sid] + self.merge_flags_a(lint_sh),
                         self.a.merge_timeout, self.a.merge_budget)

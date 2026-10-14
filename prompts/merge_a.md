@@ -11,8 +11,15 @@ manifests (JSON, one per item) are in `{{RUN_DIR}}/manifests/`:
 {{FAILED_NOTE}}
 The orchestrator has already moved each ingested item into
 raw/clippings/processed. A pre-run copy of the vault (wiki/, index.md,
-log.md) is at `{{SNAPSHOT}}`. Diff against it to see exactly what the
-sub-agents changed.
+log.md) is at `{{SNAPSHOT}}`. Every file the sub-agents added, modified
+or deleted is listed in `{{CHANGED}}`. To see a change, Read the live
+page and its copy under the snapshot.
+
+**Tools:** use Read, Grep, Glob, Edit and Write for everything. Bash is
+allowed for **one command only**, the lint in task 4, run exactly as
+written and on its own: no `cd`, no pipes, no `;` or `&&`. Any other
+shell command is denied. That's expected, and it doesn't mean the lint is
+unavailable.
 
 ## Phase A tasks
 1. **Reconcile the sub-agents' work.** They ran concurrently, so check

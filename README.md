@@ -65,6 +65,12 @@ Bash, no network, and no Gmail.
   succeeded. An item that fails twice is skipped until you ingest it by
   hand or run `vp_run.py --reset-failures`. Skipped items are named in
   the email.
+- **Sub-agents get a pipeline-aware Stop hook.** `vp_run.py` sets
+  `VP_HOOK_ROLE=ingest` and `VP_SNAPSHOT`, and the vault's hook skips the
+  checks that are the merge agent's job (index, log, orphans, the clipping
+  not having moved yet). It adds the claim-tag check, so untagged claims
+  are fixed by the agent that wrote them. Interactive sessions never set
+  the role, so for them the hook is unchanged.
 - **The gate is the orchestrator's own lint run.** The merge agent's
   "GATE-READY" doesn't count.
 - **Claim tags.** New and changed text must carry `[src]` or `[bg]`

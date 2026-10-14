@@ -32,6 +32,10 @@ a shim that calls hook() below:
   --mark   (UserPromptSubmit) stamp the turn start
   --stop   (Stop) if the vault changed this turn, block once on errors,
            then report them to the user instead of looping
+
+Inside the daily pipeline, vp_run.py sets VP_HOOK_ROLE=ingest (and
+VP_SNAPSHOT) for its sub-agents. Their hook then skips the checks that
+are the merge agent's job (INGEST_DEFERRED) and adds the provenance check.
 """
 import argparse
 import difflib
@@ -380,31 +384,50 @@ def fmt(e):
     return f"{e['check']:<16} {loc} — {e['msg']}"
 
 
+# A pipeline ingest sub-agent is told to leave these to the merge agent
+# (index.md, log.md) and the orchestrator (moving the clipping), and its
+# new pages are linked up at merge time, so they'd be false alarms mid-ingest.
+INGEST_DEFERRED = {"index-missing", "orphan", "log-missing", "clipping-missing"}
+
+
 def hook(mode, vault, marker, stdin=sys.stdin):
     """Claude Code hook entry point; always exits 0, speaks in JSON."""
     vault, marker = Path(vault), Path(marker)
+    ingest = os.environ.get("VP_HOOK_ROLE") == "ingest"
     if mode == "--mark":
-        marker.touch()
+        if not ingest:       # parallel sub-agents would race on one marker
+            marker.touch()
         return 0
     try:
         payload = json.load(stdin)
     except ValueError:
         payload = {}
-    if not marker.exists():
+    if not ingest:
+        if not marker.exists():
+            return 0
+        since = marker.stat().st_mtime
+        watched = list((vault / "wiki").rglob("*.md")) + [vault / "index.md", vault / "log.md"]
+        if not any(p.exists() and p.stat().st_mtime > since for p in watched):
+            return 0
+    snap = os.environ.get("VP_SNAPSHOT") if ingest else None
+    r = check(vault, os.environ.get("VP_FRONTMATTER", "sources"),
+              snap if snap and Path(snap).is_dir() else None)
+    errors = [e for e in r["errors"] if not (ingest and e["check"] in INGEST_DEFERRED)]
+    if not errors:
         return 0
-    since = marker.stat().st_mtime
-    watched = list((vault / "wiki").rglob("*.md")) + [vault / "index.md", vault / "log.md"]
-    if not any(p.exists() and p.stat().st_mtime > since for p in watched):
-        return 0
-    r = check(vault, os.environ.get("VP_FRONTMATTER", "sources"))
-    if r["ok"]:
-        return 0
-    errs = [fmt(e) for e in r["errors"]]
+    errs = [fmt(e) for e in errors]
     listing = "\n".join(errs[:40]) + (f"\n…and {len(errs) - 40} more" if len(errs) > 40 else "")
     if payload.get("stop_hook_active"):
         # Already sent back once this turn; don't loop. Tell the user instead.
         print(json.dumps({"systemMessage": f"Wiki lint still has {len(errs)} "
                           f"issue(s) after a fix pass:\n{listing}"}))
+    elif ingest:
+        print(json.dumps({"decision": "block", "reason":
+                          f"The structural lint found {len(errs)} issue(s) you should "
+                          "fix. Index, log, orphan and clipping-location checks are "
+                          "already excluded (they're the merge agent's). If an issue is "
+                          "on a page you didn't touch, a sibling agent may be mid-edit: "
+                          "leave it and note it in your manifest.\n" + listing}))
     else:
         print(json.dumps({"decision": "block", "reason":
                           "The vault changed this turn and the structural lint found "
