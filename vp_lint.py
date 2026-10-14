@@ -26,6 +26,12 @@ Checks (errors):
 
 Usage:
   vp_lint.py VAULT [--json] [--snapshot DIR] [--frontmatter sources|all]
+
+It is also the vault's Claude Code hook. `.claude/hooks/wiki_lint.py` is
+a shim that calls hook() below:
+  --mark   (UserPromptSubmit) stamp the turn start
+  --stop   (Stop) if the vault changed this turn, block once on errors,
+           then report them to the user instead of looping
 """
 import argparse
 import difflib
@@ -150,8 +156,8 @@ def check(vault_root, frontmatter_mode="sources", snapshot=None):
             for m in LINK_RE.finditer(line):
                 embed, inner = m.group(1) == "!", m.group(2)
                 target = parse_target(inner)
-                if not target:      # [[#heading]] self-link
-                    continue
+                if not target or re.match(r"^[a-z]+://", target, re.I):
+                    continue        # [[#heading]] self-link, or a real URL
                 hit = v.resolve(target, embed)
                 if hit is None:
                     # log.md is append-only history and can't be fixed in
@@ -369,6 +375,44 @@ def claim_blocks(lines, body0):
         i = j
 
 
+def fmt(e):
+    loc = f"{e['file']}:{e['line']}" if e["line"] else e["file"]
+    return f"{e['check']:<16} {loc} — {e['msg']}"
+
+
+def hook(mode, vault, marker, stdin=sys.stdin):
+    """Claude Code hook entry point; always exits 0, speaks in JSON."""
+    vault, marker = Path(vault), Path(marker)
+    if mode == "--mark":
+        marker.touch()
+        return 0
+    try:
+        payload = json.load(stdin)
+    except ValueError:
+        payload = {}
+    if not marker.exists():
+        return 0
+    since = marker.stat().st_mtime
+    watched = list((vault / "wiki").rglob("*.md")) + [vault / "index.md", vault / "log.md"]
+    if not any(p.exists() and p.stat().st_mtime > since for p in watched):
+        return 0
+    r = check(vault, os.environ.get("VP_FRONTMATTER", "sources"))
+    if r["ok"]:
+        return 0
+    errs = [fmt(e) for e in r["errors"]]
+    listing = "\n".join(errs[:40]) + (f"\n…and {len(errs) - 40} more" if len(errs) > 40 else "")
+    if payload.get("stop_hook_active"):
+        # Already sent back once this turn; don't loop. Tell the user instead.
+        print(json.dumps({"systemMessage": f"Wiki lint still has {len(errs)} "
+                          f"issue(s) after a fix pass:\n{listing}"}))
+    else:
+        print(json.dumps({"decision": "block", "reason":
+                          "The vault changed this turn and the structural lint found "
+                          f"{len(errs)} issue(s). Fix them (CLAUDE.md conventions), "
+                          f"or say why one should stay:\n{listing}"}))
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("vault")
@@ -383,8 +427,7 @@ def main():
         print(json.dumps(r, indent=1))
     else:
         for e in r["errors"]:
-            loc = f"{e['file']}:{e['line']}" if e["line"] else e["file"]
-            print(f"ERROR {e['check']:<16} {loc} — {e['msg']}")
+            print("ERROR " + fmt(e))
         for w in r["warnings"]:
             print(f"warn  {w['check']:<16} {w['file']} — {w['msg']}")
         c = r["counts"]

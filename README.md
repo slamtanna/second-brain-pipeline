@@ -23,7 +23,7 @@ inbox items ─► one ingest sub-agent per item, in parallel   (claude -p)
 | File | What it is |
 |---|---|
 | `vp_run.py` | The orchestrator. It handles locking, the snapshot and rollback, the fan-out, moving clippings, the gate, log appends and email. |
-| `vp_lint.py` | The structural lint, zero LLM, and the gate. `python3 vp_lint.py ~/Documents/Life` works on its own too. |
+| `vp_lint.py` | The vault's one structural lint, zero LLM: the pipeline's gate, and also the vault's Stop hook, through the shim `~/Documents/Life/.claude/hooks/wiki_lint.py` (its `--mark` and `--stop` modes call `vp_lint.hook()`). `python3 vp_lint.py ~/Documents/Life` works on its own too. |
 | `prompts/ingest.md` | The per-item sub-agent prompt. CLAUDE.md's INGEST steps 1-6b, plus concurrency rules and a JSON manifest. |
 | `prompts/merge_a.md`, `merge_b.md` | The merge agent's two phases. |
 | `run_daily.sh` | The launchd entry point (`--probe` checks access, auth and Gmail). |
