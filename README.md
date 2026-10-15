@@ -23,6 +23,7 @@ inbox items ─► one ingest sub-agent per item, in parallel   (claude -p)
 | File | What it is |
 |---|---|
 | `vp_run.py` | The orchestrator. It handles locking, the snapshot and rollback, the fan-out, moving clippings, the gate, log appends and email. |
+| `vp_frontmatter.py` | Derives the concept/company/person frontmatter from each page. `--apply` writes it, `--show N` previews it, and with no flag it lists the pages out of sync. |
 | `vp_lint.py` | The vault's one structural lint, zero LLM: the pipeline's gate, and also the vault's Stop hook, through the shim `~/Documents/Life/.claude/hooks/wiki_lint.py` (its `--mark` and `--stop` modes call `vp_lint.hook()`). `python3 vp_lint.py ~/Documents/Life` works on its own too. |
 | `prompts/ingest.md` | The per-item sub-agent prompt. CLAUDE.md's INGEST steps 1-6b, plus concurrency rules and a JSON manifest. |
 | `prompts/merge_a.md`, `merge_b.md` | The merge agent's two phases. |
@@ -77,10 +78,13 @@ Bash, no network, and no Gmail.
   (CLAUDE.md "Claim provenance tags"). The lint diffs the vault against
   the run's snapshot, so only the run's own text is checked. Old pages
   aren't retro-tagged.
-- **Frontmatter.** Source pages must have `date`, `author` and
-  `clipping`, which matches the vault today. Concept, company and people
-  pages have no frontmatter, so requiring it is opt-in:
-  `VP_FRONTMATTER=all` once they've been backfilled.
+- **Frontmatter.** Source pages have hand-written `date`, `author` and
+  `clipping`. Concept, company and person pages carry derived
+  frontmatter (`type`, `ticker`, `hub`, `sources`, `first_source`,
+  `last_source`) computed by `vp_frontmatter.py` from the page itself.
+  The merge agent's lint wrapper and the gate re-sync it, so no agent
+  maintains it by hand. The lint requires it on every page; pass
+  `--frontmatter sources` to relax that.
 - **IV15 is propose-only.** Candidates are appended to the IV15 repo's
   `LOG.md` as a dated `Milestone candidates` entry, uncommitted, and
   nothing in the repo is changed. The daily screen commits only its own

@@ -22,6 +22,10 @@ item, with these pipeline-specific changes:
    The filename is `wiki/sources/<date> <title>.md`, with punctuation
    that's awkward in filenames (`:`, `'`, `?`, `/`) dropped, matching
    existing source pages.
+   **Don't write frontmatter on concept, company or person pages.** Their
+   frontmatter (type, ticker, hub, sources, first/last source date) is
+   derived from the page by `vp_frontmatter.py`, and the orchestrator
+   syncs it, so just keep the `## Source` list right.
    For a PDF or image dropped directly in the inbox, the source page is
    the same, with a `## Summary` of what the document or image shows. An
    image item gets embedded on its source page with `![[filename]]`.

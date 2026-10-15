@@ -116,6 +116,17 @@ class Pipeline:
                  f"→ {str(d.get('result', '')).strip()[:120]!r}")
         return d
 
+    def sync_frontmatter(self):
+        """Re-derive concept/company/person frontmatter (vp_frontmatter.py).
+        Deterministic, so agents never maintain it by hand."""
+        p = subprocess.run([sys.executable, "-I", str(HERE / "vp_frontmatter.py"),
+                            str(self.vault), "--apply"], capture_output=True, text=True)
+        if p.returncode != 0:
+            raise RuntimeError(f"vp_frontmatter failed: {p.stderr[-500:]}")
+        n = re.search(r"on (\d+) page", p.stdout)
+        if n and n.group(1) != "0":
+            self.log(f"synced derived frontmatter on {n.group(1)} page(s)")
+
     def lint(self, with_snapshot=True):
         cmd = [sys.executable, "-I", str(HERE / "vp_lint.py"), str(self.vault), "--json"]
         if with_snapshot and self.snapshotted:
@@ -387,7 +398,10 @@ class Pipeline:
 
         # ---- merge agent, phase A
         lint_sh = self.run / "lint.sh"
-        lint_sh.write_text(f'#!/bin/bash\nexec "{sys.executable}" -I "{HERE / "vp_lint.py"}" '
+        # Syncs derived frontmatter first, so the agent never hand-writes it.
+        lint_sh.write_text(f'#!/bin/bash\n"{sys.executable}" -I "{HERE / "vp_frontmatter.py"}" '
+                           f'"{self.vault}" --apply >/dev/null || exit 2\n'
+                           f'exec "{sys.executable}" -I "{HERE / "vp_lint.py"}" '
                            f'"{self.vault}" --snapshot "{self.snap}" "$@"\n')
         lint_sh.chmod(0o755)
         changed = self.run / "changed.txt"
@@ -408,6 +422,7 @@ class Pipeline:
         # ---- HARD GATE: our own lint run, not the agent's word for it
         attempts = 0
         while True:
+            self.sync_frontmatter()
             gate = self.lint()
             attempts += 1
             self.log(f"GATE attempt {attempts}: {'CLEAN' if gate['ok'] else str(len(gate['errors'])) + ' errors'}")

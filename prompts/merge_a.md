@@ -49,7 +49,10 @@ unavailable.
    It checks broken links, split links, orphans, index consistency both
    ways (missing, stale, duplicate, wrong section, no summary),
    frontmatter, clipping reconciliation, log reconciliation, and
-   `[src]`/`[bg]` provenance on text added since the snapshot. Fix the
+   `[src]`/`[bg]` provenance on text added since the snapshot. The lint
+   command first re-derives concept/company/person frontmatter from each
+   page's `## Source` list, so never hand-edit those keys. Fix the
+   Source list instead. Fix the
    underlying problem. Don't game the check: link an orphan from a page
    where the link means something, don't just list it somewhere.
    Never delete a page to silence a check unless it's a duplicate you

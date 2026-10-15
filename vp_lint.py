@@ -16,7 +16,10 @@ Checks (errors):
   index-summary     index entry with no one-line summary
   frontmatter       source page missing frontmatter or a required key
                     (date, author, clipping); malformed frontmatter on any
-                    page; with --frontmatter all, any page without it
+                    page
+  frontmatter-derived  (default --frontmatter all) a concept/company/person
+                    page whose derived frontmatter (vp_frontmatter.py) is
+                    missing or stale
   clipping-missing  source page whose `clipping:` file doesn't exist
   clipping-orphan   processed clipping that no source page claims
   clipping-dup      processed clipping claimed by two source pages
@@ -139,7 +142,7 @@ class Vault:
         return None
 
 
-def check(vault_root, frontmatter_mode="sources", snapshot=None):
+def check(vault_root, frontmatter_mode="all", snapshot=None):
     v = Vault(vault_root)
     errors, warnings = [], []
 
@@ -219,6 +222,12 @@ def check(vault_root, frontmatter_mode="sources", snapshot=None):
                     f"{rel} listed {len(listed[rel])}x (lines {listed[rel]})")
 
     # --- frontmatter + clipping reconciliation ---------------------------
+    if frontmatter_mode == "all":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))  # -I drops it
+        from vp_frontmatter import out_of_sync
+        for rel, why in out_of_sync(v.root):
+            err("frontmatter-derived", rel, f"{why}; fix: python3 "
+                f"{Path(__file__).resolve().parent / 'vp_frontmatter.py'} {v.root} --apply")
     claimed = {}
     for rel in v.wiki:
         fm, malformed, _ = split_frontmatter(v.md[rel])
@@ -227,7 +236,7 @@ def check(vault_root, frontmatter_mode="sources", snapshot=None):
             continue
         is_source = rel.startswith("wiki/sources/")
         if fm is None:
-            if is_source or frontmatter_mode == "all":
+            if is_source:
                 err("frontmatter", rel, "no frontmatter")
             continue
         if not is_source:
@@ -387,7 +396,9 @@ def fmt(e):
 # A pipeline ingest sub-agent is told to leave these to the merge agent
 # (index.md, log.md) and the orchestrator (moving the clipping), and its
 # new pages are linked up at merge time, so they'd be false alarms mid-ingest.
-INGEST_DEFERRED = {"index-missing", "orphan", "log-missing", "clipping-missing"}
+# Derived frontmatter is synced by the orchestrator before the gate.
+INGEST_DEFERRED = {"index-missing", "orphan", "log-missing", "clipping-missing",
+                   "frontmatter-derived"}
 
 
 def hook(mode, vault, marker, stdin=sys.stdin):
@@ -410,7 +421,7 @@ def hook(mode, vault, marker, stdin=sys.stdin):
         if not any(p.exists() and p.stat().st_mtime > since for p in watched):
             return 0
     snap = os.environ.get("VP_SNAPSHOT") if ingest else None
-    r = check(vault, os.environ.get("VP_FRONTMATTER", "sources"),
+    r = check(vault, os.environ.get("VP_FRONTMATTER", "all"),
               snap if snap and Path(snap).is_dir() else None)
     errors = [e for e in r["errors"] if not (ingest and e["check"] in INGEST_DEFERRED)]
     if not errors:
@@ -443,7 +454,7 @@ def main():
     ap.add_argument("--snapshot", help="pre-run copy of the vault; enables "
                     "the provenance check on text added since")
     ap.add_argument("--frontmatter", choices=("sources", "all"),
-                    default=os.environ.get("VP_FRONTMATTER", "sources"))
+                    default=os.environ.get("VP_FRONTMATTER", "all"))
     a = ap.parse_args()
     r = check(a.vault, a.frontmatter, a.snapshot)
     if a.json:
