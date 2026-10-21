@@ -545,12 +545,15 @@ class Pipeline:
                             # tools at all the agent can't load it (seen with haiku).
                             ["--tools", "ToolSearch", "--permission-mode", "dontAsk",
                              "--allowedTools", "ToolSearch", "mcp__claude_ai_Gmail__send_message",
-                             "--model", self.a.email_model], 300, 1)
+                             "--model", self.a.email_model], 300, 1,
+                            # Wait for claude.ai connectors before the first request.
+                            # On 2026-10-21 (2.1.305) the request went out 15ms before
+                            # Gmail connected, so the session had no tools at all.
+                            {"MCP_CONNECTION_NONBLOCKING": "0"})
             result = str(d["result"]).strip()
             sent = d["ok"] and result.upper().startswith("SENT")
-            # Retry only when the session never had the Gmail tool (claude.ai
-            # connectors sometimes don't load under launchd, seen 2026-10-21),
-            # so nothing can have been sent. Any other failure might have sent.
+            # Retry only when the session never had the Gmail tool, so nothing
+            # can have been sent. Any other failure might have sent.
             if sent or not re.search(r"not available|unavailable|no .*tool", result, re.I):
                 break
             self.log(f"Gmail tool missing (attempt {attempt + 1}/3)")
