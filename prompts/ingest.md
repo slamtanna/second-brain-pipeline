@@ -20,8 +20,10 @@ item, with these pipeline-specific changes:
    `clipping: "{{PROCESSED_PATH}}"`. That is where the file will be once
    the orchestrator moves it; it's correct to write that path now.
    The filename is `wiki/sources/<date> <title>.md`, with punctuation
-   that's awkward in filenames (`:`, `'`, `?`, `/`) dropped, matching
-   existing source pages.
+   that's awkward in filenames (`:`, `'`, `?`, `!`, `/`) dropped, and a
+   spaced dash (` - `, ` – `, ` — `) replaced by a single space, matching
+   existing source pages (`Short Thoughts - Cassandra in Flames?` became
+   `2026-09-02 Short Thoughts Cassandra in Flames.md`).
    **Don't write frontmatter on concept, company or person pages.** Their
    frontmatter (type, ticker, hub, sources, first/last source date) is
    derived from the page by `vp_frontmatter.py`, and the orchestrator
