@@ -26,7 +26,8 @@ if [ "${1:-}" = "--probe" ]; then
   echo "claude-auth $( [ "$r" = "OK" ] && echo OK || echo "FAIL $r")" >> "$out"
   # The prompt goes right after -p: --allowedTools is variadic and would
   # swallow a trailing prompt as a tool name.
-  r=$(claude -p "Call the Gmail list_labels tool once. Reply with only OK, or FAIL and the reason." \
+  # MCP_CONNECTION_NONBLOCKING=0: wait for claude.ai connectors, as vp_run.py's email does.
+  r=$(MCP_CONNECTION_NONBLOCKING=0 claude -p "Call the Gmail list_labels tool once. Reply with only OK, or FAIL and the reason." \
       --model haiku --tools "" --permission-mode dontAsk --permission-prompts none \
       --allowedTools mcp__claude_ai_Gmail__list_labels </dev/null 2>&1 | tail -1)
   echo "gmail $r" >> "$out"

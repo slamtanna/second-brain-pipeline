@@ -49,6 +49,7 @@ import sys
 from pathlib import Path
 
 LINK_RE = re.compile(r"(!?)\[\[([^\[\]\n]+?)\]\]")
+INDEX_SEP_RE = re.compile(r"\s[—–]\s|\s-\s")   # "- [[Page]] — summary"
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 TAG_RE = re.compile(r"\[(src|bg)\]")
@@ -197,9 +198,14 @@ def check(vault_root, frontmatter_mode="all", snapshot=None):
             if not re.match(r"^\s*[-*]\s+\[\[", line):
                 continue
             # An entry may group pages: "- [[A]] / [[B]] — summary". Every
-            # link before the first dash separator is an entry.
-            parts = re.split(r"\s[—–]\s|\s-\s", line, maxsplit=1)
-            head, summary = parts[0], (parts[1] if len(parts) > 1 else "")
+            # link before the first dash separator is an entry. Only a dash
+            # outside [[...]] separates: page names can contain " - ".
+            # The search starts after the bullet so an indented "  - " isn't
+            # taken for the separator.
+            start = re.match(r"^\s*[-*]\s+", line).end()
+            masked = LINK_RE.sub(lambda m: "x" * len(m.group(0)), line)
+            sep = INDEX_SEP_RE.search(masked, start)
+            head, summary = (line[:sep.start()], line[sep.end():]) if sep else (line, "")
             for m in LINK_RE.finditer(head):
                 target = parse_target(m.group(2))
                 hit = v.resolve(target, False)

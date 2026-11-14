@@ -61,13 +61,48 @@ file to LOG.md under a "Milestone candidates" heading. If nothing in the
 new material touches IV15, the whole file is the single word `NONE`.
 
 ## 3. `{{RUN_DIR}}/digest.md`: the email
-Exactly **5 bullets**, plain text, each line starting `- `, with no
-heading, preamble or sign-off. Together they answer "what changed in my
-vault today and why it matters". Lead each bullet with the change, then
-say why it matters to me: thesis, positions, IV15. Most important first.
-Spend a bullet on contradictions or IV15 candidates when there are any.
-Mention pipeline health only if something went wrong or was skipped
-(gate retries, failed items: {{FAILED_SHORT}}). Each bullet is at most
-45 words. Don't use wikilinks; use page titles in plain text.
+It answers "what changed in my vault today and why does it matter to
+me": thesis, positions, IV15. I skim it on my phone, so it must be
+readable in under a minute. The orchestrator renders this file as a
+formatted email, so use exactly this shape:
+
+```
+# <headline>
+
+<bottom line>
+
+## New in the vault
+- **<the change>**: <why it matters to me>
+## Positions
+- …
+## Contradictions
+- …
+## IV15
+- …
+## Pipeline
+- …
+```
+
+- **Headline**: the single most important takeaway as a claim, not a
+  page title. It is also the subject line, so keep it to 60 characters.
+  Good: `Burry is betting this top repeats 2000, not 2007`.
+- **Bottom line**: one or two sentences, at most 35 words, on what
+  today's material means for my thesis or positions. No bullet.
+- **Sections**: use these headings, in this order, and leave out any
+  section with nothing to say. *Positions* covers buys, sells, holdings
+  and stale position state. *Pipeline* appears only if something went
+  wrong or was skipped (gate retries, failed items: {{FAILED_SHORT}}).
+- **Bullets**: 4 to 8 in total, at most 3 per section, most important
+  first. Each bullet is one line: a bold lead of at most 8 words naming
+  the change, a colon, then one sentence of at most 25 words on why it
+  matters. Keep the decisive number and drop the rest. One idea per
+  bullet: don't chain clauses with semicolons.
+- *Contradictions*: only the ones I should act on (status **new**), one
+  per bullet; summarise the rest as a count.
+- *IV15*: name each milestone-scale candidate; give the routine ones as
+  a count with a few words on what they cover. If nothing touches IV15,
+  leave the section out.
+- Plain page titles, no wikilinks. No preamble or sign-off, and no
+  formatting other than `**bold**` leads.
 
 Reply with one line: `PHASE-B-DONE`.

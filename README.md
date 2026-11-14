@@ -3,7 +3,8 @@
 Unattended daily ingest for the second-brain vault (`~/Documents/Life`).
 Each morning it ingests whatever is in `raw/clippings/` (clippings, PDFs,
 images), integrates and lints the result, checks it against the existing
-wiki, proposes IV15 follow-ups, and emails a 5-bullet digest.
+wiki, proposes IV15 follow-ups, and emails a digest (a headline, a
+bottom line and a few short labelled sections).
 
 ```
 inbox items ─► one ingest sub-agent per item, in parallel   (claude -p)
@@ -96,7 +97,8 @@ Bash, no network, and no Gmail.
 - `~/.local/state/vault-pipeline/runs/<run-id>/` holds everything about a
   run: the pre-run snapshot, the manifests, every claude call's JSON, the
   lint before and at the gate, `contradictions.md`,
-  `milestone_candidates.md`, `digest.md`, `email.txt` and `summary.json`.
+  `milestone_candidates.md`, `digest.md`, `email.txt`, `email.html` (open it
+  in a browser to preview the email) and `summary.json`.
   The last 30 runs are kept.
 - `runs.log` has one JSON line per run. `daily.log` holds the launchd
   output. `failures.json` has the per-item failure counts.
