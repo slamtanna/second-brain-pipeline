@@ -1,6 +1,29 @@
 # vault-pipeline
 
-Unattended daily ingest for the second-brain vault (`~/Documents/Life`).
+An unattended pipeline that turns a day's saved reading into a linked personal wiki, then emails a short digest of what changed.
+
+I keep a "second brain": a folder of Markdown pages (people, companies, concepts and sources, cross-linked with `[[wikilinks]]`) built mostly from long-form investing research. Filing a new article properly takes real work: write a source page, update every company and person it touches, notice where it contradicts what the wiki already says, and keep the index consistent. This pipeline does that every morning without me, using Claude Code agents in headless mode. I read the result as a phone-sized email.
+
+## The design problem: letting agents write to something you care about
+
+Having an LLM summarize an article is easy. The hard part is letting several agents edit a knowledge base unattended, every day, without slowly corrupting it. The design follows from that:
+
+- **Least privilege per stage.** Saved web pages are untrusted input, so the agents that read them get file tools only: no shell, no network, no email. The digest-writing phase can read the wiki but write only to its own scratch folder. Only the final step can send email, and it can do nothing else.
+- **Deterministic where possible.** A plain Python orchestrator, not an agent, handles locking, snapshots, rollback, moving files, logging and the email. Agents do only the parts that need judgment.
+- **An independent quality gate.** After the agents finish, a zero-LLM lint (`vp_lint.py`) checks the wiki's structure: broken links, orphaned sources, missing frontmatter, index drift. The orchestrator runs it itself; an agent saying "done" doesn't count. If the wiki fails, the merge agent gets two retries to fix it.
+- **All or nothing.** The wiki is snapshotted before each run. If any step fails, everything rolls back and the articles go back in the inbox. An article that fails twice is set aside and named in the email.
+- **Every claim is labeled.** New text must mark each claim as coming from the source (`[src]`) or from background knowledge (`[bg]`), and the lint enforces this on the run's changes only.
+- **Read-only means read-only.** The vault is hashed before and after the read-only phase, and any change is reverted.
+- **Bounded cost.** Each agent call has a dollar cap, and a day with nothing to file makes no LLM calls and sends no email.
+
+**Stack:** Python standard library only, the Claude Code CLI (`claude -p`) for the agents, macOS `launchd` for scheduling, and Gmail through a Claude connector for the digest. About 1,400 lines of Python plus three prompt files.
+
+It's a personal tool: paths assume my vault's layout, and it also feeds follow-up candidates to a separate private research project (IV15). The rest of this README is the operator manual.
+
+---
+
+## Overview
+
 Each morning it ingests whatever is in `raw/clippings/` (clippings, PDFs,
 images), integrates and lints the result, checks it against the existing
 wiki, proposes IV15 follow-ups, and emails a digest (a headline, a
