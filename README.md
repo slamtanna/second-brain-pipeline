@@ -1,4 +1,4 @@
-# vault-pipeline
+# second-brain-pipeline
 
 An unattended pipeline that turns a day's saved reading into a linked personal wiki, then emails a short digest of what changed.
 
